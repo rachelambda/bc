@@ -18,11 +18,13 @@ typedef enum {
     LEFT  = 5,
     WHILE = 6,
     END   = 7,
-    INIT  = 8,
-    EXIT  = 9
+    ADD   = 8,
+    ADDP  = 9, /* multiple right */
+    INIT  = 10,
+    EXIT  = 11
 } instruction;
 
-const char* inst[10] = {
+const char* inst[12] = {
     [EXIT]  = "\xb8\x3c\x00\x00\x00\xbf\x00\x00\x00\x00\x0f\x05",
     [INIT]  = "\xbe\x00\x00\x00\x20\xba\x01\x00\x00\x00",
     [PUT]   = "\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x0f\x05",
@@ -31,11 +33,13 @@ const char* inst[10] = {
     [DEC]   = "\xfe\x0e",
     [RIGHT] = "\x48\xff\xc6",
     [LEFT]  = "\x48\xff\xce",
+    [ADD]   = "\x80\x06X",
+    [ADDP]  = "\x81\xc6XXXX",
     [WHILE] = "\x80\x3e\x00\x0f\x84XXXX",
-    [END]   = "\x80\x3e\x00\x0f\x85XXXX"
+    [END]   = "\x80\x3e\x00\x0f\x85XXXX",
 };
 
-size_t inst_size[10] = {
+size_t inst_size[14] = {
     [EXIT]  = 12,
     [INIT]  = 10,
     [PUT]   = 12,
@@ -44,6 +48,8 @@ size_t inst_size[10] = {
     [DEC]   = 2,
     [RIGHT] = 3,
     [LEFT]  = 3,
+    [ADD]   = 3,
+    [ADDP]  = 6,
     [WHILE] = 9,
     [END]   = 9,
 };
@@ -138,39 +144,104 @@ int main(int argc, char** argv) {
     code_size = inst_size[INIT];
 
     for (int i = 0; i < inst_cnt; i++) {
-        memcpy(code + code_size, inst[inst_arr[i]], inst_size[inst_arr[i]]);
-        code_size += inst_size[inst_arr[i]];
-        if (inst_arr[i] == WHILE || inst_arr[i] == END) {
-            size_t whiles  = 0;
-            size_t ends    = 0;
-            size_t offset  = 1;
-            int32_t file_offset = 0;
-            if (inst_arr[i] == WHILE) {
-                whiles = 1;
-                while (whiles != ends) {
-                    if (inst_arr[i + offset] == WHILE) {
-                        whiles++;
-                    } else if (inst_arr[i + offset] == END) {
-                        ends++;
-                    }
-                    file_offset += inst_size[inst_arr[i + offset]];
+        size_t offset;
+        switch (inst_arr[i]) {
+            case INC:
+            case DEC:;
+                int8_t addend8 = 0;
+                offset = 0;
+                while (inst_arr[i + offset] == INC || inst_arr[i + offset] == DEC) {
+                    addend8 += inst_arr[i + offset] == INC ? 1 : -1;
                     offset++;
                 }
-            } else if (inst_arr[i] == END) {
-                ends = 1;
-                while (whiles != ends) {
-                    if (inst_arr[i - offset] == WHILE) {
-                        whiles++;
-                    } else if (inst_arr[i - offset] == END) {
-                        ends++;
-                    }
-                    file_offset -= inst_size[inst_arr[i - offset]];
+                memcpy(code + code_size, inst[ADD], inst_size[ADD]);
+                code_size += inst_size[ADD];
+                /* assumes your compiler signs the same way as asm */
+                *(int8_t*)(code + code_size - 1) = addend8;
+                i += offset - 1;
+                break;
+            case RIGHT:
+            case LEFT:;
+                int32_t addend32 = 0;
+                offset = 0;
+                while (inst_arr[i + offset] == RIGHT || inst_arr[i + offset] == LEFT) {
+                    addend32 += inst_arr[i + offset] == RIGHT ? 1 : -1;
                     offset++;
                 }
-            }
 
-            /* assumes your compiler signs the same way as asm */
-            *(uint32_t*)(code + code_size - 4) = file_offset;
+                memcpy(code + code_size, inst[ADDP], inst_size[ADDP]);
+                code_size += inst_size[ADDP];
+                /* assumes your compiler signs the same way as asm */
+                *(int32_t*)(code + code_size - 4) = addend32;
+                i += offset - 1;
+                break;
+            case WHILE:
+            case END:;
+                size_t whiles  = 0;
+                size_t ends    = 0;
+                offset  = 1;
+                int32_t file_offset = 0;
+                if (inst_arr[i] == WHILE) {
+                    whiles = 1;
+                    while (whiles != ends) {
+                        if (inst_arr[i + offset] == WHILE) {
+                            whiles++;
+                        } else if (inst_arr[i + offset] == END) {
+                            ends++;
+                        }
+                        size_t size;
+                        switch (inst_arr[i + offset]) {
+                            case RIGHT:
+                            case LEFT:
+                                while (inst_arr[i + offset] == RIGHT || inst_arr[i + offset] == LEFT) offset++;
+                                file_offset += inst_size[ADDP];
+                                break;
+                            case INC:
+                            case DEC:
+                                while (inst_arr[i + offset] == INC || inst_arr[i + offset] == DEC) offset++;
+                                file_offset += inst_size[ADD];
+                                break;
+                            default:
+                                file_offset += inst_size[inst_arr[i + offset]];
+                                offset++;
+                        }
+                    }
+                } else if (inst_arr[i] == END) {
+                    ends = 1;
+                    while (whiles != ends) {
+                        if (inst_arr[i - offset] == WHILE) {
+                            whiles++;
+                        } else if (inst_arr[i - offset] == END) {
+                            ends++;
+                        }
+                        size_t size;
+                        switch (inst_arr[i - offset]) {
+                            case RIGHT:
+                            case LEFT:
+                                while (inst_arr[i - offset] == RIGHT || inst_arr[i - offset] == LEFT) offset++;
+                                file_offset -= inst_size[ADDP];
+                                break;
+                            case INC:
+                            case DEC:
+                                while (inst_arr[i - offset] == INC || inst_arr[i - offset] == DEC) offset++;
+                                file_offset -= inst_size[ADD];
+                                break;
+                            default:
+                                file_offset -= inst_size[inst_arr[i - offset]];
+                                offset++;
+                        }
+                    }
+                }
+
+                memcpy(code + code_size, inst[inst_arr[i]], inst_size[inst_arr[i]]);
+                code_size += inst_size[inst_arr[i]];
+                /* assumes your compiler signs the same way as asm */
+                *(int32_t*)(code + code_size - 4) = file_offset;
+                break;
+            default:
+                memcpy(code + code_size, inst[inst_arr[i]], inst_size[inst_arr[i]]);
+                code_size += inst_size[inst_arr[i]];
+                break;
         }
     }
 
