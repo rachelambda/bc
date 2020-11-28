@@ -1,0 +1,10 @@
+bc, a x86_64-linux brainfuck compiler
+=====================================
+
+building
+--------
+make
+
+usage
+-----
+bc <source file> <output file>
