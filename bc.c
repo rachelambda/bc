@@ -44,14 +44,16 @@ size_t inst_size[14] = {
     [INIT]  = 10,
     [PUT]   = 12,
     [GET]   = 12,
-    [INC]   = 2,
-    [DEC]   = 2,
-    [RIGHT] = 3,
-    [LEFT]  = 3,
     [ADD]   = 3,
     [ADDP]  = 6,
     [WHILE] = 9,
     [END]   = 9,
+    /* these are not their actual size since they might not be represented by their */
+    /* own instructions in the machine code */
+    [INC]   = 3,
+    [DEC]   = 3,
+    [RIGHT] = 6,
+    [LEFT]  = 6,
 };
 
 
