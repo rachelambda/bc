@@ -3,14 +3,16 @@
 #include <stdint.h>
 #include <string.h>
 
+/* used for chmod */
 #include <sys/stat.h>
 
+/* used to create binary */
 #include <elf.h>
 
+/* used by die() */
 char* progname;
 
-/* TODO: switch to only use inc or dec when a single + - < or > is used */
-
+/* instruction set */
 typedef enum {
     PUT   = 0,
     GET   = 1,
@@ -21,11 +23,12 @@ typedef enum {
     WHILE = 6,
     END   = 7,
     ADD   = 8,
-    ADDP  = 9, /* multiple right */
+    ADDP  = 9, /* add pointer */
     INIT  = 10,
     EXIT  = 11
 } instruction;
 
+/* raw instruction bytes, X's represent args */
 const char* inst[12] = {
     [EXIT]  = "\xb8\x3c\x00\x00\x00\xbf\x00\x00\x00\x00\x0f\x05",
     [INIT]  = "\xbe\x00\x00\x00\x20\xba\x01\x00\x00\x00",
@@ -41,6 +44,7 @@ const char* inst[12] = {
     [END]   = "\x80\x3e\x00\x0f\x85XXXX",
 };
 
+/* the size of instructions */
 size_t inst_size[14] = {
     [EXIT]  = 12,
     [INIT]  = 10,
@@ -64,15 +68,18 @@ void die(char* msg) {
 
 int main(int argc, char** argv) {
 
+    /* progname = basename(argv[0]); */
     progname = strrchr(argv[0], '/');
     if (progname[0] == '\0' || progname[1] == '\0')
         progname = argv[1];
     else
         progname++;
 
+    /* bc infile outfile */
     if (argc < 3)
         die("not enough args");
 
+    /* read file into memory */
     FILE* fp = fopen(argv[1], "rb");
 
     if (!fp)
@@ -91,11 +98,13 @@ int main(int argc, char** argv) {
 
     fclose(fp);
 
+    /* array of instructions rather than bytes */
     instruction* inst_arr = malloc(length * sizeof(instruction));
     if (!inst_arr)
         die("cannot allocate memory");
     size_t inst_cnt = 0;
 
+    /* fill instruction array */
     for (int i = 0; i < length; i++) switch(file[i]) {
         case '-':
             inst_arr[inst_cnt] = DEC;
@@ -137,6 +146,7 @@ int main(int argc, char** argv) {
     if (!inst_arr)
         die("cannot allocate memory");
 
+    /* machine code to be put into binary */
     size_t code_size = inst_size[INIT] + inst_size[EXIT];
     for (int i = 0; i < inst_cnt; i++)
         code_size += inst_size[inst_arr[i]];
@@ -145,9 +155,11 @@ int main(int argc, char** argv) {
     memcpy(code, inst[INIT], inst_size[INIT]);
     code_size = inst_size[INIT];
 
+    /* copy instructions into code */
     for (int i = 0; i < inst_cnt; i++) {
         size_t offset;
         switch (inst_arr[i]) {
+            /* optimize out multiple + and - after each other */
             case INC:
             case DEC:;
                 int8_t addend8 = 0;
@@ -176,6 +188,7 @@ int main(int argc, char** argv) {
                 }
                 i += offset - 1;
                 break;
+            /* optimize out multiple < and > after each other */
             case RIGHT:
             case LEFT:;
                 int32_t addend32 = 0;
@@ -205,6 +218,10 @@ int main(int argc, char** argv) {
                 }
                 i += offset - 1;
                 break;
+            /* place marker here that will be resolved later */
+            /* maybe this should be replaced with an array of addresses, */
+            /* since this assumes the code array doesn't contain [, ] or * */
+            /* which it might do in the future (optimizations) */
             case WHILE:
             case END:;
                 memset(code + code_size + 1, inst_arr[i] == WHILE ? '[' : ']',
@@ -212,6 +229,7 @@ int main(int argc, char** argv) {
                 *(code + code_size) = '*';
                 code_size += inst_size[inst_arr[i]];
                 break;
+            /* just copy over the instruction */
             default:
                 memcpy(code + code_size, inst[inst_arr[i]], inst_size[inst_arr[i]]);
                 code_size += inst_size[inst_arr[i]];
@@ -219,6 +237,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    /* resolve the loops, step 8 at a time since loop instruction is 9 bytes */
     /* if inst_size[WHILE] is less than 8 this would break */
     for (int i = 0; i < code_size; i += 8) {
         if (code[i] == '[') {
@@ -230,6 +249,7 @@ int main(int argc, char** argv) {
             size_t ends = 0;
             int32_t offset = inst_size[WHILE];
 
+            /* find the corresponding right bracket */
             while (whiles != ends) {
                 if (code[i + offset] == '[' || code[i + offset] == ']') {
                     val = code[i + offset];
@@ -240,10 +260,13 @@ int main(int argc, char** argv) {
                     offset += 8;
             }
 
+            /* write the instructions */
             memcpy(code + i, inst[WHILE], inst_size[WHILE]);
-            *(int32_t*)(code + i + inst_size[WHILE] - 4) = offset - inst_size[END];
+            *(int32_t*)(code + i + inst_size[WHILE] - 4) = offset
+                - inst_size[END];
 
-            memcpy(code + i + offset - inst_size[END], inst[END], inst_size[END]);
+            memcpy(code + i + offset - inst_size[END], inst[END],
+                    inst_size[END]);
             *(int32_t*)(code + i + offset - 4) = -offset + inst_size[WHILE];
 
 
@@ -251,9 +274,11 @@ int main(int argc, char** argv) {
             die("non matching ']'");
     }
 
+    /* add exit instruction */
     memcpy(code + code_size, inst[EXIT], inst_size[EXIT]);
     code_size += inst_size[EXIT];
 
+    /* write elf executable */
     FILE* outfp = fopen(argv[2], "wb");
     if (!outfp)
         die("unable to open output file");
@@ -273,7 +298,8 @@ int main(int argc, char** argv) {
     ehdr.e_type = ET_EXEC;
     ehdr.e_machine = EM_X86_64;
     ehdr.e_version = EV_CURRENT;
-    ehdr.e_entry = 0x1000;
+    ehdr.e_entry = 0x1000
+        + (sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)));
     ehdr.e_phoff = sizeof(Elf64_Ehdr); ehdr.e_shoff = 0;
     ehdr.e_flags = 0;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);
@@ -286,8 +312,10 @@ int main(int argc, char** argv) {
     Elf64_Phdr phdrs[2];
 
     phdrs[0].p_type  = PT_LOAD;
-    phdrs[0].p_offset = 0x1000;
-    phdrs[0].p_vaddr = 0x1000;
+    phdrs[0].p_offset = 
+        (sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)));
+    phdrs[0].p_vaddr = 0x1000
+        + (sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)));
     phdrs[0].p_paddr = 0;
     phdrs[0].p_align = 0x1000;
     phdrs[0].p_flags = PF_X | PF_R;
@@ -304,9 +332,7 @@ int main(int argc, char** argv) {
     phdrs[1].p_memsz  = 30000;
 
     fwrite(&ehdr, sizeof(Elf64_Ehdr), 1, outfp);
-    fwrite(&phdrs[0], sizeof(Elf64_Phdr), 1, outfp);
-    fwrite(&phdrs[1], sizeof(Elf64_Phdr), 1, outfp);
-    fseek(outfp, 0x1000, SEEK_SET);
+    fwrite(phdrs, sizeof(Elf64_Phdr), 2, outfp);
     fwrite(code, 1, code_size, outfp);
 
     fclose(outfp);
