@@ -9,6 +9,8 @@
 
 char* progname;
 
+/* TODO: switch to only use inc or dec when a single + - < or > is used */
+
 typedef enum {
     PUT   = 0,
     GET   = 1,
