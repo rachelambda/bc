@@ -31,7 +31,7 @@ typedef enum {
 /* raw instruction bytes, X's represent args */
 const char* inst[12] = {
     [EXIT]  = "\xb8\x3c\x00\x00\x00\xbf\x00\x00\x00\x00\x0f\x05",
-    [INIT]  = "\xbe\x00\x00\x00\x20\xba\x01\x00\x00\x00",
+    [INIT]  = "\x48\xbeXXXXXXXX\xba\x01\x00\x00\x00",
     [PUT]   = "\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x0f\x05",
     [GET]   = "\xb8\x00\x00\x00\x00\xbf\x00\x00\x00\x00\x0f\x05",
     [INC]   = "\xfe\x06",
@@ -47,7 +47,7 @@ const char* inst[12] = {
 /* the size of instructions */
 size_t inst_size[14] = {
     [EXIT]  = 12,
-    [INIT]  = 10,
+    [INIT]  = 15,
     [PUT]   = 12,
     [GET]   = 12,
     [INC]   = 2,
@@ -278,6 +278,10 @@ int main(int argc, char** argv) {
     memcpy(code + code_size, inst[EXIT], inst_size[EXIT]);
     code_size += inst_size[EXIT];
 
+    /* set tape address */
+    *(uint64_t*)(code + 2) =
+        (uint64_t)(0x1000 + code_size + 0x1000 - (code_size % 0x1000));
+
     /* write elf executable */
     FILE* outfp = fopen(argv[2], "wb");
     if (!outfp)
@@ -324,7 +328,9 @@ int main(int argc, char** argv) {
 
     phdrs[1].p_type  = PT_LOAD;
     phdrs[1].p_offset = 0;
-    phdrs[1].p_vaddr = 0x20000000;
+    /* calculate next free page after instructions */
+    phdrs[1].p_vaddr =
+        0x1000 + code_size + 0x1000 - (code_size % 0x1000);
     phdrs[1].p_paddr = 0;
     phdrs[1].p_align = 0x1000;
     phdrs[1].p_flags = PF_W | PF_R;
