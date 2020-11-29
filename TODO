@@ -1,0 +1,7 @@
+TODO
+====
+
+* Change to filling in [ and ] last, so that offset can be calculated more nicely
+* Remove +- and <> combos with an addend of 0
+* Use inc for + - < and > when addend is 1
+* Replace common patterns and loops with what they do
