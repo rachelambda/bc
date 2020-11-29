@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     else
         progname++;
 
-    if (argc < 2)
+    if (argc < 3)
         die("not enough args");
 
     FILE* fp = fopen(argv[1], "rb");
@@ -181,72 +181,48 @@ int main(int argc, char** argv) {
                 break;
             case WHILE:
             case END:;
-                size_t whiles  = 0;
-                size_t ends    = 0;
-                offset  = 1;
-                int32_t file_offset = 0;
-                if (inst_arr[i] == WHILE) {
-                    whiles = 1;
-                    while (whiles != ends) {
-                        if (inst_arr[i + offset] == WHILE) {
-                            whiles++;
-                        } else if (inst_arr[i + offset] == END) {
-                            ends++;
-                        }
-                        size_t size;
-                        switch (inst_arr[i + offset]) {
-                            case RIGHT:
-                            case LEFT:
-                                while (inst_arr[i + offset] == RIGHT || inst_arr[i + offset] == LEFT) offset++;
-                                file_offset += inst_size[ADDP];
-                                break;
-                            case INC:
-                            case DEC:
-                                while (inst_arr[i + offset] == INC || inst_arr[i + offset] == DEC) offset++;
-                                file_offset += inst_size[ADD];
-                                break;
-                            default:
-                                file_offset += inst_size[inst_arr[i + offset]];
-                                offset++;
-                        }
-                    }
-                } else if (inst_arr[i] == END) {
-                    ends = 1;
-                    while (whiles != ends) {
-                        if (inst_arr[i - offset] == WHILE) {
-                            whiles++;
-                        } else if (inst_arr[i - offset] == END) {
-                            ends++;
-                        }
-                        size_t size;
-                        switch (inst_arr[i - offset]) {
-                            case RIGHT:
-                            case LEFT:
-                                while (inst_arr[i - offset] == RIGHT || inst_arr[i - offset] == LEFT) offset++;
-                                file_offset -= inst_size[ADDP];
-                                break;
-                            case INC:
-                            case DEC:
-                                while (inst_arr[i - offset] == INC || inst_arr[i - offset] == DEC) offset++;
-                                file_offset -= inst_size[ADD];
-                                break;
-                            default:
-                                file_offset -= inst_size[inst_arr[i - offset]];
-                                offset++;
-                        }
-                    }
-                }
-
-                memcpy(code + code_size, inst[inst_arr[i]], inst_size[inst_arr[i]]);
+                memset(code + code_size, inst_arr[i] == WHILE ? '[' : ']',
+                        inst_size[inst_arr[i]]);
+                *(code + code_size) = '*';
                 code_size += inst_size[inst_arr[i]];
-                /* assumes your compiler signs the same way as asm */
-                *(int32_t*)(code + code_size - 4) = file_offset;
                 break;
             default:
                 memcpy(code + code_size, inst[inst_arr[i]], inst_size[inst_arr[i]]);
                 code_size += inst_size[inst_arr[i]];
                 break;
         }
+    }
+
+    /* if inst_size[WHILE] is less than 8 this would break */
+    for (int i = 0; i < code_size; i += 8) {
+        if (code[i] == '[') {
+            uint8_t val = '[';
+            /* get to start of brackets */
+            while (code[i] != '*') i--;
+
+            size_t whiles = 1;
+            size_t ends = 0;
+            int32_t offset = inst_size[WHILE];
+
+            while (whiles != ends) {
+                if (code[i + offset] == '[' || code[i + offset] == ']') {
+                    val = code[i + offset];
+                    if (val == '[') whiles++; else ends++;
+                    while (code[i + offset] != '*') offset--;
+                    offset += inst_size[WHILE];
+                } else
+                    offset += 8;
+            }
+
+            memcpy(code + i, inst[WHILE], inst_size[WHILE]);
+            *(int32_t*)(code + i + inst_size[WHILE] - 4) = offset - inst_size[END];
+
+            memcpy(code + i + offset - inst_size[END], inst[END], inst_size[END]);
+            *(int32_t*)(code + i + offset - 4) = -offset + inst_size[WHILE];
+
+
+        } else if (code[i] == ']')
+            die("non matching ']'");
     }
 
     memcpy(code + code_size, inst[EXIT], inst_size[EXIT]);
@@ -272,8 +248,7 @@ int main(int argc, char** argv) {
     ehdr.e_machine = EM_X86_64;
     ehdr.e_version = EV_CURRENT;
     ehdr.e_entry = 0x1000;
-    ehdr.e_phoff = sizeof(Elf64_Ehdr);
-    ehdr.e_shoff = 0;
+    ehdr.e_phoff = sizeof(Elf64_Ehdr); ehdr.e_shoff = 0;
     ehdr.e_flags = 0;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);
     ehdr.e_phentsize = sizeof(Elf64_Phdr);
