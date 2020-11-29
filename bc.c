@@ -251,6 +251,8 @@ int main(int argc, char** argv) {
 
             /* find the corresponding right bracket */
             while (whiles != ends) {
+                if (i + offset > code_size)
+                    die("non matching '['");
                 if (code[i + offset] == '[' || code[i + offset] == ']') {
                     val = code[i + offset];
                     if (val == '[') whiles++; else ends++;
