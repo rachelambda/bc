@@ -46,16 +46,14 @@ size_t inst_size[14] = {
     [INIT]  = 10,
     [PUT]   = 12,
     [GET]   = 12,
+    [INC]   = 2,
+    [DEC]   = 2,
+    [RIGHT] = 3,
+    [LEFT]  = 3,
     [ADD]   = 3,
     [ADDP]  = 6,
     [WHILE] = 9,
     [END]   = 9,
-    /* these are not their actual size since they might not be represented by their */
-    /* own instructions in the machine code */
-    [INC]   = 3,
-    [DEC]   = 3,
-    [RIGHT] = 6,
-    [LEFT]  = 6,
 };
 
 
@@ -158,10 +156,24 @@ int main(int argc, char** argv) {
                     addend8 += inst_arr[i + offset] == INC ? 1 : -1;
                     offset++;
                 }
-                memcpy(code + code_size, inst[ADD], inst_size[ADD]);
-                code_size += inst_size[ADD];
-                /* assumes your compiler signs the same way as asm */
-                *(int8_t*)(code + code_size - 1) = addend8;
+                switch (addend8) {
+                    case 0:
+                        break;
+                    case 1:
+                        memcpy(code + code_size, inst[INC], inst_size[INC]);
+                        code_size += inst_size[INC];
+                        break;
+                    case -1:
+                        memcpy(code + code_size, inst[DEC], inst_size[DEC]);
+                        code_size += inst_size[DEC];
+                        break;
+                    default:
+                        memcpy(code + code_size, inst[ADD], inst_size[ADD]);
+                        code_size += inst_size[ADD];
+                        /* assumes your compiler signs the same way as asm */
+                        *(int8_t*)(code + code_size - 1) = addend8;
+                        break;
+                }
                 i += offset - 1;
                 break;
             case RIGHT:
@@ -173,15 +185,29 @@ int main(int argc, char** argv) {
                     offset++;
                 }
 
-                memcpy(code + code_size, inst[ADDP], inst_size[ADDP]);
-                code_size += inst_size[ADDP];
-                /* assumes your compiler signs the same way as asm */
-                *(int32_t*)(code + code_size - 4) = addend32;
+                switch (addend32) {
+                    case 0:
+                        break;
+                    case 1:
+                        memcpy(code + code_size, inst[RIGHT], inst_size[RIGHT]);
+                        code_size += inst_size[RIGHT];
+                        break;
+                    case -1:
+                        memcpy(code + code_size, inst[LEFT], inst_size[LEFT]);
+                        code_size += inst_size[LEFT];
+                        break;
+                    default:
+                        memcpy(code + code_size, inst[ADDP], inst_size[ADDP]);
+                        code_size += inst_size[ADDP];
+                        /* assumes your compiler signs the same way as asm */
+                        *(int32_t*)(code + code_size - 4) = addend32;
+                        break;
+                }
                 i += offset - 1;
                 break;
             case WHILE:
             case END:;
-                memset(code + code_size, inst_arr[i] == WHILE ? '[' : ']',
+                memset(code + code_size + 1, inst_arr[i] == WHILE ? '[' : ']',
                         inst_size[inst_arr[i]]);
                 *(code + code_size) = '*';
                 code_size += inst_size[inst_arr[i]];
