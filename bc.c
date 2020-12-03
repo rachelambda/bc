@@ -304,8 +304,7 @@ int main(int argc, char** argv) {
     ehdr.e_type = ET_EXEC;
     ehdr.e_machine = EM_X86_64;
     ehdr.e_version = EV_CURRENT;
-    ehdr.e_entry = 0x1000
-        + (sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)));
+    ehdr.e_entry = 0x1000;
     ehdr.e_phoff = sizeof(Elf64_Ehdr); ehdr.e_shoff = 0;
     ehdr.e_flags = 0;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);
@@ -318,10 +317,8 @@ int main(int argc, char** argv) {
     Elf64_Phdr phdrs[2];
 
     phdrs[0].p_type  = PT_LOAD;
-    phdrs[0].p_offset = 
-        (sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)));
-    phdrs[0].p_vaddr = 0x1000
-        + (sizeof(Elf64_Ehdr) + (2 * sizeof(Elf64_Phdr)));
+    phdrs[0].p_offset = 0x1000;
+    phdrs[0].p_vaddr = 0x1000;
     phdrs[0].p_paddr = 0;
     phdrs[0].p_align = 0x1000;
     phdrs[0].p_flags = PF_X | PF_R;
@@ -341,6 +338,7 @@ int main(int argc, char** argv) {
 
     fwrite(&ehdr, sizeof(Elf64_Ehdr), 1, outfp);
     fwrite(phdrs, sizeof(Elf64_Phdr), 2, outfp);
+    fseek(outfp, 0x1000, SEEK_SET);
     fwrite(code, 1, code_size, outfp);
 
     fclose(outfp);
