@@ -236,7 +236,7 @@ int main(int argc, char** argv) {
 
     /* resolve the loops, step 8 at a time since loop instruction is 9 bytes */
     /* if inst_size[WHILE] is less than 8 this would break */
-	assert(inst_size[WHILE] >= 8);
+    assert(inst_size[WHILE] >= 8);
     for (int i = 0; i < code_size; i += 8) {
         if (code[i] == '[') {
             uint8_t val = '[';
@@ -289,19 +289,19 @@ int main(int argc, char** argv) {
 
     Elf64_Ehdr ehdr;
 
-	/* elf magic */
+    /* elf magic */
     ehdr.e_ident[EI_MAG0] = 0x7f;
     ehdr.e_ident[EI_MAG1] = 'E';
     ehdr.e_ident[EI_MAG2] = 'L';
     ehdr.e_ident[EI_MAG3] = 'F';
-	/* elf info */
+    /* elf info */
     ehdr.e_ident[EI_CLASS] = ELFCLASS64;
     ehdr.e_ident[EI_DATA] = ELFDATA2LSB;
     ehdr.e_ident[EI_VERSION] = EV_CURRENT;
     ehdr.e_ident[EI_OSABI] = ELFOSABI_SYSV;
     ehdr.e_ident[EI_ABIVERSION] = 0;
 
-	/* elf header */
+    /* elf header */
     ehdr.e_type = ET_EXEC;
     ehdr.e_machine = EM_X86_64;
     ehdr.e_version = EV_CURRENT;
@@ -315,10 +315,10 @@ int main(int argc, char** argv) {
     ehdr.e_shnum = 0;
     ehdr.e_shstrndx = SHN_UNDEF;
 
-	/* elf program headers */
+    /* elf program headers */
     Elf64_Phdr phdrs[2];
 
-	/* generated code */
+    /* generated code */
     phdrs[0].p_type  = PT_LOAD;
     phdrs[0].p_offset = 0x1000;
     phdrs[0].p_vaddr = 0x1000;
@@ -328,7 +328,7 @@ int main(int argc, char** argv) {
     phdrs[0].p_filesz = code_size;
     phdrs[0].p_memsz  = code_size;
 
-	/* tape of 30000 */
+    /* tape of 30000 */
     phdrs[1].p_type  = PT_LOAD;
     phdrs[1].p_offset = 0;
     /* calculate next free page after instructions */
@@ -340,7 +340,7 @@ int main(int argc, char** argv) {
     phdrs[1].p_filesz = 0;
     phdrs[1].p_memsz  = 30000;
 
-	/* write to file */
+    /* write to file */
     fwrite(&ehdr, sizeof(Elf64_Ehdr), 1, outfp);
     fwrite(phdrs, sizeof(Elf64_Phdr), 2, outfp);
     fseek(outfp, 0x1000, SEEK_SET);
@@ -348,7 +348,7 @@ int main(int argc, char** argv) {
 
     fclose(outfp);
 
-	/* mark file executable */
+    /* mark file executable */
     chmod(argv[2], S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP |
             S_IROTH | S_IXOTH );
 }
