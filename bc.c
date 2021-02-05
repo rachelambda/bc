@@ -24,13 +24,14 @@ typedef enum {
     WHILE = 6,
     END   = 7,
     ADD   = 8,
-    ADDP  = 9, /* add pointer */
-    INIT  = 10,
-    EXIT  = 11
+    SUB   = 9,
+    ADDP  = 10, /* add pointer */
+    INIT  = 11,
+    EXIT  = 12
 } instruction;
 
 /* raw instruction bytes, X's represent args */
-const char* inst[12] = {
+const char* inst[13] = {
     [EXIT]  = "\xb8\x3c\x00\x00\x00\xbf\x00\x00\x00\x00\x0f\x05",
     [INIT]  = "\x48\xbeXXXXXXXX\xba\x01\x00\x00\x00",
     [PUT]   = "\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x0f\x05",
@@ -40,6 +41,7 @@ const char* inst[12] = {
     [RIGHT] = "\x48\xff\xc6",
     [LEFT]  = "\x48\xff\xce",
     [ADD]   = "\x80\x06X",
+    [SUB]   = "\x80\x2eX",
     [ADDP]  = "\x81\xc6XXXX",
     [WHILE] = "\x80\x3e\x00\x0f\x84XXXX",
     [END]   = "\x80\x3e\x00\x0f\x85XXXX",
@@ -56,6 +58,7 @@ size_t inst_size[14] = {
     [RIGHT] = 3,
     [LEFT]  = 3,
     [ADD]   = 3,
+    [SUB]   = 3,
     [ADDP]  = 6,
     [WHILE] = 9,
     [END]   = 9,
@@ -159,17 +162,18 @@ int main(int argc, char** argv) {
     /* copy instructions into code */
     for (int i = 0; i < inst_cnt; i++) {
         size_t offset;
+		int32_t addend32;
         switch (inst_arr[i]) {
             /* optimize out multiple + and - after each other */
             case INC:
             case DEC:;
-                int8_t addend8 = 0;
+                addend32 = 0;
                 offset = 0;
                 while (inst_arr[i + offset] == INC || inst_arr[i + offset] == DEC) {
-                    addend8 += inst_arr[i + offset] == INC ? 1 : -1;
+                    addend32 += inst_arr[i + offset] == INC ? 1 : -1;
                     offset++;
                 }
-                switch (addend8) {
+                switch (addend32) {
                     case 0:
                         break;
                     case 1:
@@ -181,10 +185,16 @@ int main(int argc, char** argv) {
                         code_size += inst_size[DEC];
                         break;
                     default:
-                        memcpy(code + code_size, inst[ADD], inst_size[ADD]);
-                        code_size += inst_size[ADD];
-                        /* assumes your compiler signs the same way as asm */
-                        *(int8_t*)(code + code_size - 1) = addend8;
+						if (addend32 > 0) {
+							memcpy(code + code_size, inst[ADD], inst_size[ADD]);
+							code_size += inst_size[ADD];
+						} else {
+							puts("SUB");
+							memcpy(code + code_size, inst[SUB], inst_size[SUB]);
+							code_size += inst_size[SUB];
+							addend32 = -addend32;
+						}
+                        *(int8_t*)(code + code_size - 1) = (uint8_t)(addend32 % 256);
                         break;
                 }
                 i += offset - 1;
@@ -192,7 +202,7 @@ int main(int argc, char** argv) {
             /* optimize out multiple < and > after each other */
             case RIGHT:
             case LEFT:;
-                int32_t addend32 = 0;
+                addend32 = 0;
                 offset = 0;
                 while (inst_arr[i + offset] == RIGHT || inst_arr[i + offset] == LEFT) {
                     addend32 += inst_arr[i + offset] == RIGHT ? 1 : -1;
