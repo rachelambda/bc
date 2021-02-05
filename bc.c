@@ -189,7 +189,6 @@ int main(int argc, char** argv) {
                             memcpy(code + code_size, inst[ADD], inst_size[ADD]);
                             code_size += inst_size[ADD];
                         } else {
-                            puts("SUB");
                             memcpy(code + code_size, inst[SUB], inst_size[SUB]);
                             code_size += inst_size[SUB];
                             addend32 = -addend32;
