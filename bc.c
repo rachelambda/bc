@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
     /* copy instructions into code */
     for (int i = 0; i < inst_cnt; i++) {
         size_t offset;
-		int32_t addend32;
+        int32_t addend32;
         switch (inst_arr[i]) {
             /* optimize out multiple + and - after each other */
             case INC:
@@ -185,15 +185,15 @@ int main(int argc, char** argv) {
                         code_size += inst_size[DEC];
                         break;
                     default:
-						if (addend32 > 0) {
-							memcpy(code + code_size, inst[ADD], inst_size[ADD]);
-							code_size += inst_size[ADD];
-						} else {
-							puts("SUB");
-							memcpy(code + code_size, inst[SUB], inst_size[SUB]);
-							code_size += inst_size[SUB];
-							addend32 = -addend32;
-						}
+                        if (addend32 > 0) {
+                            memcpy(code + code_size, inst[ADD], inst_size[ADD]);
+                            code_size += inst_size[ADD];
+                        } else {
+                            puts("SUB");
+                            memcpy(code + code_size, inst[SUB], inst_size[SUB]);
+                            code_size += inst_size[SUB];
+                            addend32 = -addend32;
+                        }
                         *(int8_t*)(code + code_size - 1) = (uint8_t)(addend32 % 256);
                         break;
                 }
