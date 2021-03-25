@@ -1,2 +1,2 @@
 bc: bc.c
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ bc.c
